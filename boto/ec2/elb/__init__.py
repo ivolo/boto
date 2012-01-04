@@ -124,7 +124,7 @@ class ELBConnection(AWSQueryConnection):
         return self.get_list('DescribeLoadBalancers', params,
                              [('member', LoadBalancer)])
 
-    def create_load_balancer(self, name, zones, listeners):
+    def create_load_balancer(self, name, zones, listeners, security_groups=None, subnets=None):
         """
         Create a new load balancer for your account.
 
@@ -132,7 +132,7 @@ class ELBConnection(AWSQueryConnection):
         :param name: The mnemonic name associated with the new load balancer
 
         :type zones: List of strings
-        :param zones: The names of the availability zone(s) to add.
+        :param zones: The names of the availability zone(s) to add. Use None if specifying VPC subnets.
 
         :type listeners: List of tuples
         :param listeners: Each tuple contains three or four values,
@@ -143,6 +143,12 @@ class ELBConnection(AWSQueryConnection):
                           string containing either 'TCP', 'HTTP' or 'HTTPS';
                           SSLCertificateID is the ARN of a AWS AIM certificate,
                           and must be specified when doing HTTPS.
+
+        :type security_groups: List of strings
+        :param security_groups: The security groups assigned to your LoadBalancer within your VPC.
+
+        :type subnets: List of strings
+        :param subnets: A list of subnet IDs in your VPC to attach to your LoadBalancer.
 
         :rtype: :class:`boto.ec2.elb.loadbalancer.LoadBalancer`
         :return: The newly created :class:`boto.ec2.elb.loadbalancer.LoadBalancer`
@@ -155,7 +161,13 @@ class ELBConnection(AWSQueryConnection):
             params['Listeners.member.%d.Protocol' % i] = listener[2]
             if listener[2]=='HTTPS':
                 params['Listeners.member.%d.SSLCertificateId' % i] = listener[3]
-        self.build_list_params(params, zones, 'AvailabilityZones.member.%d')
+        # can not specify avalability zones when load balancer is being added to a VPC subnet
+        if subnets is None:
+            self.build_list_params(params, zones, 'AvailabilityZones.member.%d')
+        else:
+            self.build_list_params(params, subnets, 'Subnets.member.%d')
+        if security_groups is not None:
+            self.build_list_params(params, security_groups, 'SecurityGroups.member.%d')
         load_balancer = self.get_object('CreateLoadBalancer',
                                         params, LoadBalancer)
         load_balancer.name = name
